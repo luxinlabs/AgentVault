@@ -39,3 +39,8 @@ next-env.d.ts
 
 !.env.example
 *.tsbuildinfo
+
+/models/
+/.venv-privacy/
+__pycache__/
+*.pyc

@@ -1,3 +1,5 @@
+import { recordDisclosure } from './disclosures';
+import type { Disclosure } from './privacy';
 import { env } from 'cloudflare:workers';
 import { assess, defaultPolicy, scenarios, runEvaluations, validatePolicy, type Policy, type Evidence, type Assessment } from './engine';
 export type TraceEvent = {
@@ -47,6 +49,8 @@ export async function database() {
     if (!db)
         throw new Error('Database binding unavailable.');
     await db.batch([
+        db.prepare('CREATE TABLE IF NOT EXISTS disclosures (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, transaction_id TEXT, tool TEXT NOT NULL, destination TEXT NOT NULL, mode TEXT NOT NULL, report TEXT NOT NULL, preview TEXT NOT NULL, created TEXT NOT NULL)'),
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_disclosures_workspace_created ON disclosures(workspace,created)'),
         db.prepare('CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, policy TEXT NOT NULL, created TEXT NOT NULL)'),
         db.prepare('CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, run_id TEXT NOT NULL, scenario TEXT NOT NULL, invoice TEXT NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL, evidence TEXT NOT NULL, assessment TEXT NOT NULL, trace TEXT NOT NULL, verification TEXT, created TEXT NOT NULL, updated TEXT NOT NULL)'),
         db.prepare('CREATE INDEX IF NOT EXISTS idx_transactions_workspace_created ON transactions(workspace,created)'),
@@ -55,14 +59,14 @@ export async function database() {
     ]);
     return db;
 }
-function parsed(r: Row): Transaction { return { ...r, evidence: JSON.parse(r.evidence), assessment: JSON.parse(r.assessment), trace: JSON.parse(r.trace), verification: r.verification ? JSON.parse(r.verification) : null }; }
+function parsed(r: Row): Transaction { return { id:r.id,run_id:r.run_id,scenario:r.scenario,invoice:r.invoice,amount:r.amount,status:r.status,created:r.created,updated:r.updated, evidence: JSON.parse(r.evidence), assessment: JSON.parse(r.assessment), trace: JSON.parse(r.trace), verification: r.verification ? JSON.parse(r.verification) : null }; }
 export async function ensureWorkspace(id: string) { const db = await database(); await db.prepare('INSERT OR IGNORE INTO workspaces(id,policy,created) VALUES(?,?,?)').bind(id, JSON.stringify(defaultPolicy), new Date().toISOString()).run(); return db; }
 export async function policyFor(id: string): Promise<Policy> { const db = await ensureWorkspace(id); const row = await db.prepare('SELECT policy FROM workspaces WHERE id=?').bind(id).first<{
     policy: string;
 }>(); return JSON.parse(row!.policy); }
 export async function snapshot(id: string) { const db = await ensureWorkspace(id); const { results } = await db.prepare('SELECT * FROM transactions WHERE workspace=? ORDER BY created DESC LIMIT 200').bind(id).all<Row>(); const evaluation = await db.prepare('SELECT result FROM evaluations WHERE workspace=? ORDER BY created DESC LIMIT 1').bind(id).first<{
     result: string;
-}>(); return { transactions: results.map(parsed), policy: await policyFor(id), evaluation: evaluation ? JSON.parse(evaluation.result) : null, scenarios: scenarios.map(({ id, name, description, category, amount }) => ({ id, name, description, category, amount })), mode: 'simulation', workspace: id }; }
+}>(); const disclosureRows=await db.prepare('SELECT id,transaction_id,tool,destination,mode,report,preview,created FROM disclosures WHERE workspace=? ORDER BY created DESC LIMIT 200').bind(id).all<Omit<Disclosure,'report'> & {report:string}>(); return { disclosures:disclosureRows.results.map(r=>({...r,report:JSON.parse(r.report)})), transactions: results.map(parsed), policy: await policyFor(id), evaluation: evaluation ? JSON.parse(evaluation.result) : null, scenarios: scenarios.map(({ id, name, description, category, amount }) => ({ id, name, description, category, amount })), mode: 'simulation', workspace: id }; }
 const evt = (tool: string, label: string, detail: string, source: string, state: TraceEvent['state'] = 'ok'): TraceEvent => ({ id: crypto.randomUUID(), tool, label, detail, source, at: new Date().toISOString(), state });
 export async function getTransaction(workspace: string, id: string) { const db = await database(); const row = await db.prepare('SELECT * FROM transactions WHERE workspace=? AND id=?').bind(workspace, id).first<Row>(); if (!row)
     throw new Error('Transaction not found.'); return parsed(row); }
@@ -95,7 +99,9 @@ export async function authorize(workspace: string, scenarioId: string, runId: st
             return parsed(row);
         throw new Error('Policy or available budget changed. Retry authorization.');
     }
-    return getTransaction(workspace, id);
+    const saved = await getTransaction(workspace, id);
+    await recordDisclosure(workspace,'agentvault.authorize',saved,[e.account,e.trustedAccount],'preview',id);
+    return saved;
 }
 export async function pay(workspace: string, id: string) {
     const tx = await getTransaction(workspace, id);

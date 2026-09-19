@@ -19,6 +19,10 @@ Open the local URL printed by the server (normally http://localhost:3000). Selec
 4. Open **Approvals**. Verify Northstar's legitimate bank change, enter a decision note, and approve. The persisted payment settles exactly once.
 5. Run **Security evals** to display measured results for 30 synthetic cases. Policies lets you demonstrate pause, budget, and authority limits.
 
+## Privacy Trace
+
+The MVP also includes an MCP disclosure guard, a redacted disclosure ledger, and a browser-only privacy scratchpad. Bank and contact details are minimized before tool results reach the model, while fraud comparison facts remain available. An optional offline OpenAI privacy-filter adapter and its limitations are documented in [Privacy setup](docs/PRIVACY.md). The OpenAI model is not loaded in the default demo.
+
 ## Included
 
 - Responsive dashboard: overview, transaction search/filter, MoneyTrace, evidence export, approvals, policy editing, integrations, evaluation results.

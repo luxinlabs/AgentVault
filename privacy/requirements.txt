@@ -1,0 +1,4 @@
+# Optional adapter only; install in an isolated Python environment.
+transformers>=5,<6
+torch>=2.5,<3
+huggingface_hub>=1,<2

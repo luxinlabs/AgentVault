@@ -12,9 +12,11 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/engine.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:integration": "node scripts/integration-test.mjs",
-    "trueforge": "node --env-file-if-exists=.env scripts/trueforge-runner.mjs"
+    "trueforge": "node --env-file-if-exists=.env scripts/trueforge-runner.mjs",
+    "test:privacy-local": "python3 -m unittest discover -s tests -p test_local_filter.py",
+    "test:mcp": "node scripts/mcp-test.mjs"
   },
   "dependencies": {
     "@truefoundry/trueforge-sdk": "^0.2.0",

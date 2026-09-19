@@ -34,7 +34,7 @@ export async function callTool(workspace: string, name: string, args: Record<str
     if (!e)
         throw new Error('Unknown scenario.');
     if (name === 'gmail_read')
-        return { simulation: true, trust: 'untrusted', sender: e.sender, subject: e.subject, body: e.body, invoice: e.invoice, amount: e.amount, destination: e.account };
+        return { simulation: true, trust: 'untrusted', sender: e.sender, subject: e.subject, body: e.body, invoice: e.invoice, amount: e.amount, destination: e.account, destinationMatchesTrusted: e.account===e.trustedAccount, senderDomainMatches:e.sender.toLowerCase().split('@').at(-1)===e.domain.toLowerCase() };
     if (name === 'erp_get_invoice')
         return { simulation: true, trust: 'trusted fixture', invoice: e.invoice, exists: e.invoiceExists, approved: e.approved, amount: e.invoiceAmount, currency: e.currency };
     return { simulation: true, trust: 'trusted fixture', vendor: e.vendor, domain: e.domain, account: e.trustedAccount, knownVendor: e.knownVendor, contact: `registered-contact@${e.domain}` };

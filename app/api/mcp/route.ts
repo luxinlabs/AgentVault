@@ -1,3 +1,5 @@
+import { recordDisclosure } from '../../../lib/disclosures';
+import { scenarios } from '../../../lib/engine';
 import { env } from 'cloudflare:workers';
 import { mcpTools, callTool } from '../../../lib/mcp';
 function guard(req: Request) {
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
             if (!p || typeof p.name !== 'string' || !p.arguments || typeof p.arguments !== 'object' || Array.isArray(p.arguments))
                 throw new Error('Invalid tool arguments.');
             const result = await callTool(workspace, p.name, p.arguments as Record<string, unknown>);
-            return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false });
+            return reply({ content: [{ type: 'text', text: JSON.stringify(await recordDisclosure(workspace,p.name,result,scenarios.flatMap(e=>[e.account,e.trustedAccount]),'mcp_response',typeof (result as {id?:unknown})?.id==='string'?(result as {id:string}).id:null)) }], isError: false });
         }
         catch (e) {
             return reply({ content: [{ type: 'text', text: e instanceof Error ? e.message : 'Tool failed' }], isError: true });

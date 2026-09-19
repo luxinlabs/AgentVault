@@ -4,7 +4,7 @@ const base=process.env.AGENTVAULT_TEST_URL??'http://localhost:3000';
 let cookie='';let checks=0;
 async function request(body,expected=200,overrideCookie){const r=await fetch(`${base}/api/vault`,{method:body?'POST':'GET',headers:{...(cookie?{Cookie:overrideCookie??cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!cookie)cookie=r.headers.get('set-cookie')?.split(';')[0]??'';const d=await r.json();assert.equal(r.status,expected,JSON.stringify(d));checks++;return d;}
 const initial=await request();assert.equal(initial.transactions.length,0);
-const runId=randomUUID();const first=await request({action:'run',scenario:'all',runId});assert.equal(first.transactions.length,3);
+const runId=randomUUID();const first=await request({action:'run',scenario:'all',runId});assert.equal(first.transactions.length,3);assert.equal(first.disclosures.length,3);assert.ok(first.disclosures.every(d=>d.mode==='preview'&&d.report.detectedSpans>0));for(const d of first.disclosures){assert.ok(!d.preview.includes('billing@'));assert.ok(!d.preview.includes('7742'));assert.ok(!d.preview.includes('8219\"'));}assert.ok(first.transactions.every(t=>!('workspace' in t)));
 const legitimate=first.transactions.find(t=>t.scenario==='legitimate'),attack=first.transactions.find(t=>t.scenario==='impersonation'),change=first.transactions.find(t=>t.scenario==='bank-change');
 assert.equal(legitimate.status,'paid');assert.equal(attack.status,'blocked');assert.equal(attack.assessment.fraud,96);assert.equal(change.status,'review');
 const retry=await request({action:'run',scenario:'all',runId});assert.equal(retry.transactions.length,3);

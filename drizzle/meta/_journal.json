@@ -8,6 +8,13 @@
       "when": 1789844294155,
       "tag": "0000_wandering_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789845797344,
+      "tag": "0001_opposite_absorbing_man",
+      "breakpoints": true
     }
   ]
 }
