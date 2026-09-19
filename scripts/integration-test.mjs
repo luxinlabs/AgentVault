@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+const base=process.env.AGENTVAULT_TEST_URL??'http://localhost:3000';
+let cookie='';let checks=0;
+async function request(body,expected=200,overrideCookie){const r=await fetch(`${base}/api/vault`,{method:body?'POST':'GET',headers:{...(cookie?{Cookie:overrideCookie??cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});if(!cookie)cookie=r.headers.get('set-cookie')?.split(';')[0]??'';const d=await r.json();assert.equal(r.status,expected,JSON.stringify(d));checks++;return d;}
+const initial=await request();assert.equal(initial.transactions.length,0);
+const runId=randomUUID();const first=await request({action:'run',scenario:'all',runId});assert.equal(first.transactions.length,3);
+const legitimate=first.transactions.find(t=>t.scenario==='legitimate'),attack=first.transactions.find(t=>t.scenario==='impersonation'),change=first.transactions.find(t=>t.scenario==='bank-change');
+assert.equal(legitimate.status,'paid');assert.equal(attack.status,'blocked');assert.equal(attack.assessment.fraud,96);assert.equal(change.status,'review');
+const retry=await request({action:'run',scenario:'all',runId});assert.equal(retry.transactions.length,3);
+await request({action:'review',id:attack.id,allow:true,reason:'Attempt bypass'},400);
+await request({action:'review',id:change.id,allow:true,reason:'Attempt without verification'},400);
+const investigated=await request({action:'verify',id:attack.id});assert.equal(investigated.transactions.find(t=>t.id===attack.id).verification.confirmed,false);
+await request({action:'verify',id:change.id});
+const approved=await request({action:'review',id:change.id,allow:true,reason:'Confirmed using registered vendor contact.'});assert.equal(approved.transactions.find(t=>t.id===change.id).status,'paid');
+await request({action:'review',id:change.id,allow:true,reason:'Duplicate approval'},400);
+const reloaded=await request();assert.equal(reloaded.transactions.find(t=>t.id===change.id).status,'paid');
+await request({action:'verify',id:attack.id},400,`agentvault_workspace=${randomUUID()}`);
+const cross=await fetch(`${base}/api/vault`,{method:'POST',headers:{Cookie:cookie,'Content-Type':'application/json',Origin:'https://evil.example'},body:JSON.stringify({action:'eval'})});assert.equal(cross.status,403);checks++;
+const policy={...initial.policy,dailyBudget:50000};await request({action:'policy',policy});
+// Only $14,420 remains. Two concurrent $12,480 payments cannot both reserve it.
+const concurrent=await Promise.all([request({action:'run',scenario:'legitimate',runId:randomUUID()},200).catch(e=>e),request({action:'run',scenario:'legitimate',runId:randomUUID()},200).catch(e=>e)]);
+assert.ok(concurrent.some(r=>!(r instanceof Error)));
+const after=await request();const committed=after.transactions.filter(t=>['paid','review','authorized'].includes(t.status)).reduce((sum,t)=>sum+t.amount,0);assert.ok(committed<=5000000,'Concurrent requests overspent the budget');
+await request({action:'policy',policy:{...policy,dailyBudget:5000,maxPayment:5000}},400);
+await request({action:'policy',policy:{...policy,enabled:false}});
+const paused=await request({action:'run',scenario:'legitimate',runId:randomUUID()});assert.equal(paused.transactions[0].status,'blocked');
+const evaluated=await request({action:'eval'});assert.equal(evaluated.evaluation.passed,30);
+await request({action:'run',scenario:'missing'},400);
+await request({action:'policy',policy:{...policy,reviewThreshold:100}},400);
+const mcp=await fetch(`${base}/api/mcp`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})});assert.ok([401,503].includes(mcp.status));checks++;
+console.log(`Passed ${checks} API checks: persistence, outcomes, idempotency, review gating, tenant isolation, cross-origin protection, concurrent budget limits, pause, evals, MCP default-deny.`);

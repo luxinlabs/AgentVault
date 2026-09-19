@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { assess, scenarios, defaultPolicy, validatePolicy, runEvaluations } from '../lib/engine.ts';
+test('three distinct authorization outcomes and explainable fraud score', () => { assert.equal(assess(scenarios[0]).decision, 'allow'); const attack = assess(scenarios[1]); assert.equal(attack.decision, 'block'); assert.equal(attack.fraud, 96); assert.equal(assess(scenarios[2]).decision, 'review'); assert.equal(attack.signals.find(s => s.code === 'bank')?.source, 'erp'); });
+test('case insensitive exact sender domains; lookalikes do not pass', () => { assert.equal(assess({ ...scenarios[0], sender: 'Billing@ACME.COM' }).decision, 'allow'); assert.ok(assess({ ...scenarios[0], sender: 'billing@acme.com.evil.test' }).signals.some(s => s.code === 'domain')); });
+test('hard blocks cannot be relaxed by raising review threshold', () => { for (const s of scenarios.filter(s => s.expected === 'block'))
+    assert.equal(assess(s, { ...defaultPolicy, reviewThreshold: 79 }).decision, 'block'); });
+test('bank changes always require a human even at permissive risk threshold', () => { assert.equal(assess(scenarios[2], { ...defaultPolicy, reviewThreshold: 79 }).decision, 'review'); });
+test('pause, budget exhaustion, unapproved and tampered invoices fail closed', () => { assert.equal(assess(scenarios[0], { ...defaultPolicy, enabled: false }).decision, 'block'); assert.equal(assess(scenarios[0], defaultPolicy, 99000).decision, 'block'); assert.equal(assess({ ...scenarios[0], approved: false }).decision, 'block'); assert.equal(assess({ ...scenarios[0], amount: 100 }).decision, 'block'); });
+test('invalid amounts and currencies cannot authorize', () => { for (const amount of [0, -1, NaN, Infinity, 12.345])
+    assert.equal(assess({ ...scenarios[0], amount, invoiceAmount: amount }).decision, 'block'); assert.equal(assess({ ...scenarios[0], currency: 'EUR' }).decision, 'block'); });
+test('exact budget and per-payment boundaries allow valid amounts', () => { const e = { ...scenarios[0], amount: 50000, invoiceAmount: 50000 }; assert.equal(assess(e, defaultPolicy, 50000).decision, 'allow'); assert.equal(assess({ ...e, amount: 50000.01, invoiceAmount: 50000.01 }).decision, 'block'); });
+test('policy payload validation rejects malformed or unsafe limits', () => { for (const p of [null, {}, { ...defaultPolicy, reviewThreshold: 100 }, { ...defaultPolicy, enabled: 'true' }, { ...defaultPolicy, dailyBudget: 100 }, { ...defaultPolicy, maxPayment: Infinity }])
+    assert.throws(() => validatePolicy(p)); assert.deepEqual(validatePolicy(defaultPolicy), defaultPolicy); });
+test('30-case regression suite measures each case and does not invent performance', () => { const r = runEvaluations(); assert.equal(r.total, 30); assert.equal(r.passed, 30); assert.equal(r.attacksBlocked, 15); assert.equal(r.legitimateAllowed, 10); assert.equal(r.reviews, 5); assert.equal(r.falsePositives, 0); assert.ok(r.medianMs >= 0); assert.ok(r.rows.every(x => x.ms >= 0)); });
