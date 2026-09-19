@@ -44,3 +44,7 @@ next-env.d.ts
 /.venv-privacy/
 __pycache__/
 *.pyc
+
+# Local runtime state and private architecture notes
+/.trueforge/
+/system design.md

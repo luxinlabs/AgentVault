@@ -15,6 +15,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:integration": "node scripts/integration-test.mjs",
     "trueforge": "node --env-file-if-exists=.env scripts/trueforge-runner.mjs",
+    "trueforge:server": "node --env-file-if-exists=.env scripts/trueforge-server.mjs",
+    "trueforge:setup": "node --env-file-if-exists=.env scripts/trueforge-setup.mjs",
     "test:privacy-local": "python3 -m unittest discover -s tests -p test_local_filter.py",
     "test:mcp": "node scripts/mcp-test.mjs"
   },
@@ -30,6 +32,7 @@
     "@cloudflare/workers-types": "5.20260919.1",
     "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
     "@tailwindcss/postcss": "4.2.1",
+    "@truefoundry/trueforge": "0.2.0",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

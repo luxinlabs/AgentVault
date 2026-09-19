@@ -1,4 +1,5 @@
 import { snapshot, authorize, pay, investigate, review, updatePolicy, evaluate } from '../../../lib/store';
+import { env } from 'cloudflare:workers';
 function identity(req: Request) { const value = req.headers.get('cookie')?.match(/(?:^|;\s*)agentvault_workspace=([a-f0-9-]{36})(?:;|$)/)?.[1]; return value ?? crypto.randomUUID(); }
 function response(data: unknown, id: string, status = 200) { return Response.json(data, { status, headers: { 'Set-Cookie': `agentvault_workspace=${id}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`, 'Cache-Control': 'no-store' } }); }
 export async function GET(req: Request) { const id = identity(req); try {
@@ -16,6 +17,12 @@ export async function POST(req: Request) {
         const b = await req.json() as Record<string, unknown>;
         if (!b || typeof b.action !== 'string')
             throw new Error('An action is required.');
+        if (b.action === 'agent-workspace') {
+            const workspace = (env as unknown as Record<string, string | undefined>).AGENTVAULT_WORKSPACE;
+            if (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1'].includes(new URL(req.url).hostname) || !workspace || !/^[a-f0-9-]{36}$/.test(workspace))
+                return response({ error: 'The shared agent workspace is available only in the local development server.' }, id, 403);
+            return response(await snapshot(workspace), workspace);
+        }
         if (b.action === 'run') {
             const ids = b.scenario === 'all' ? ['legitimate', 'impersonation', 'bank-change'] : [String(b.scenario)];
             const runId = typeof b.runId === 'string' ? b.runId : crypto.randomUUID();

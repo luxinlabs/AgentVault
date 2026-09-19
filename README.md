@@ -4,6 +4,8 @@
 
 ## Run
 
+For the complete local OpenAI + TrueForge setup, see [quickstart.md](quickstart.md).
+
 ```sh
 npm install
 npm run dev
